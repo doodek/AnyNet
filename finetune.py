@@ -1,5 +1,11 @@
 import argparse
 import os
+import numpy as np
+import cv2 as cv
+# cv.namedWindow("3d", cv.WINDOW_NORMAL)
+fourcc = cv.VideoWriter_fourcc('m','p','4','v')
+writer = cv.VideoWriter("3d.mp4", fourcc, 2, (1232,736)) 
+
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -72,7 +78,7 @@ def main():
 
     TestImgLoader = torch.utils.data.DataLoader(
         DA.myImageFloder(test_left_img, test_right_img, test_left_disp, False),
-        batch_size=args.test_bsize, shuffle=False, num_workers=4, drop_last=False)
+        batch_size=args.test_bsize, shuffle=True, num_workers=4, drop_last=False)
 
     if not os.path.isdir(args.save_path):
         os.makedirs(args.save_path)
@@ -131,6 +137,8 @@ def main():
 
     test(TestImgLoader, model, log)
     log.info('full training time = {:.2f} Hours'.format((time.time() - start_full_time) / 3600))
+    writer.release()
+    #cv.waitKey(0);
 
 
 def train(dataloader, model, optimizer, log, epoch=0):
@@ -186,7 +194,8 @@ def test(dataloader, model, log):
 
     model.eval()
 
-    for batch_idx, (imgL, imgR, disp_L) in enumerate(dataloader):
+    for batch_idx, (imgL, imgR, disp_L, pathl, pathr) in enumerate(dataloader):
+        
         imgL = imgL.float().cuda()
         imgR = imgR.float().cuda()
         disp_L = disp_L.float().cuda()
@@ -195,6 +204,22 @@ def test(dataloader, model, log):
             outputs = model(imgL, imgR)
             for x in range(stages):
                 output = torch.squeeze(outputs[x], 1)
+                arr = output[x].cpu().detach().numpy()
+                #print(arr.shape)
+                arr8uc1 = (arr * 255 // np.amax(arr)).astype(np.uint8)
+                #print(arr8uc1)
+                map = cv.applyColorMap(arr8uc1, cv.COLORMAP_JET)
+                print("m", map.shape)
+
+                left_raw = cv.imread(pathl[x])[:368,:1232]
+                print("l", left_raw.shape)
+                frame = cv.vconcat([map, left_raw])
+                print(frame.shape)
+                writer.write(frame)
+                #cv.imwrite("iml.jpg", left_to_save)#imgL.cpu().detach().numpy().astype(np.uint8))
+                #cv.imwrite("imr.jpg", right_to_save)#imgR.cpu().detach().numpy().astype(np.uint8))
+                #cv.imwrite("dd.jpg", map)
+                #cv.imshow("3d", map)
                 D1s[x].update(error_estimating(output, disp_L).item())
 
         info_str = '\t'.join(['Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])
@@ -245,3 +270,4 @@ class AverageMeter(object):
 
 if __name__ == '__main__':
     main()
+

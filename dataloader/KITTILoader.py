@@ -75,7 +75,7 @@ class myImageFloder(data.Dataset):
            left_img       = processed(left_img)
            right_img      = processed(right_img)
 
-           return left_img, right_img, dataL
+           return left_img, right_img, dataL, left, right
 
     def __len__(self):
         return len(self.left)
